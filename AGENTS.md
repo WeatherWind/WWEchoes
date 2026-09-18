@@ -42,7 +42,10 @@
 - 改动合规红线、悬浮窗 Win32 样式、评分数据/算法前，先读 `docs/research/2026-09-18-参考项目与技术方案调研.md` 对应章节。
 
 ## 版本控制
-- 本地 git（master），**尚无远程仓库**。用户明确要求做好版本控制：实质变更须提交，提交信息说明动机；建立远程仓库后更新本节。
+- 远程仓库：https://github.com/WeatherWind/WWEchoes.git（默认分支 `main`）。
+- 双机跨对话协作：任何会话开始工作前先 `git pull`，结束前提交并推送（详见「协作模式」）。
+- 提交信息说明动机；CI（`.github/workflows/ci.yml`）在 Windows runner 跑测试，打 `v*` tag 触发 onefile 打包并附 Release。
+- 评分数据更新必须走 `scripts/vendor_wwuid.py`，不允许手改 characters.json。
 
 ## 协作模式（双机跨对话）
 - **macOS 会话**：纯逻辑（评分引擎、词条数据、ROI 计算）、UI 骨架、文档、CI 配置；本地可跑单测。
@@ -52,7 +55,6 @@
 - 平台守卫：Windows 专用代码集中在 `capture/`、`overlay/` 的 win 模块内，用懒加载隔离，保证 mac 上可导入运行其余部分与单测。
 
 ## 当前状态与下一步
-- 已完成：初始技术调研、需求对齐（14 项决策收敛）、CONTEXT.md、3 个 ADR、M0 项目骨架与评分引擎。
-- 进行中：评分引擎移植与单测（mac 侧）；等待 Windows 会话接手 capture/overlay/ROI 实测。
-- 待用户动作：① 建远程仓库（或授权 `gh` 创建）——双机同步的前置；② Windows 会话提供 1080p 国服截图到 `docs/assets/`。
-- 远程仓库建立后：接入 GitHub Actions 打包并更新本节。
+- 已完成：初始技术调研、需求对齐（14 项决策收敛）、CONTEXT.md、3 个 ADR、M0 项目骨架与评分引擎（21 测试全过）、远程仓库接入。
+- 进行中：等待 Windows 会话接手 capture/overlay/ROI 实测。
+- 待用户动作：Windows 会话提供 1080p 国服截图到 `docs/assets/`（ROI 设计前置）。
