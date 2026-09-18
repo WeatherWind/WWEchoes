@@ -31,7 +31,7 @@ GRADE_COLORS = {
     "s": QColor("#b07fd8"),
     "a": QColor("#4a90d9"),
     "b": QColor("#5bbd6b"),
-    "c": QColor("#8a8a8a"),
+    "c": QColor("#c3c9d1"),  # C 档灰提亮（原 #8a8a8a 真机不可读）
     None: QColor("#555555"),
 }
 
@@ -39,7 +39,7 @@ VALID_TIER_COLORS = {
     "s": QColor("#e6b422"),
     "a": QColor("#9d7bd8"),
     "b": QColor("#5bbd6b"),
-    None: QColor("#9aa0ab"),
+    None: QColor("#ccd2da"),  # 非有效词条：暗灰真机不可读，提亮
 }
 
 #: 面板底色（真机像素取证：QWidget 不开 WA_StyledBackground 时 QSS 背景
@@ -113,8 +113,8 @@ class ScoreCard(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(_PANEL_QSS)
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 10, 12, 10)
-        root.setSpacing(4)
+        root.setContentsMargins(12, 8, 12, 8)
+        root.setSpacing(3)
 
         header = QHBoxLayout()
         self.char_label = QLabel("—")
@@ -136,16 +136,16 @@ class ScoreCard(QWidget):
         root.addWidget(self.best_label)
 
         self.entries_box = QVBoxLayout()
-        self.entries_box.setSpacing(5)
+        self.entries_box.setSpacing(4)
         root.addLayout(self.entries_box)
-        root.addSpacing(6)
+        root.addSpacing(4)
 
         self.summary = SummaryBar()
         root.addWidget(self.summary)
         self._entry_labels: list[QLabel] = []
         # 固定尺寸：容纳满配（2 主+5 副）词条；高度自适应会随异步重算抖动
         # （真机反馈"一会高一会低"），且底边对齐定位依赖稳定高度
-        self.setFixedSize(336, 344)
+        self.setFixedSize(336, 308)
 
     def show_character(self, score: CharacterScore) -> None:
         if score.character == "default":
