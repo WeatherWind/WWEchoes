@@ -125,7 +125,13 @@ def client_rect(hwnd: int) -> tuple[int, int]:
 
 
 class WgcCaptureBackend(CaptureBackend):
-    """按 HWND 推送游戏客户区帧（BGR uint8）的自由线程 WGC 后端。"""
+    """按 HWND 推送游戏客户区帧（BGR uint8）的自由线程 WGC 后端。
+
+    WGC 帧是窗口的可见边框区（含标题栏与 1px 边框，实测「窗口」模式
+    1922×1112 = 1+1920+1 / 32+1080），与 ROI 的客户区坐标系不一致，
+    回调内自动裁剪到客户区（帧尺寸变化时重取窗口几何，适配显示模式
+    切换；全屏/最大化帧==客户区，裁剪量为零）。
+    """
 
     def __init__(self, hwnd: int | None = None, min_interval_ms: int = 33) -> None:
         try:
@@ -144,19 +150,41 @@ class WgcCaptureBackend(CaptureBackend):
         )
         self._on_frame_user: FrameCallback | None = None
         self._on_closed_user: Callable[[], None] | None = None
+        # 客户区裁剪状态（帧尺寸变化时重算）
+        self._frame_size: tuple[int, int] | None = None
+        self._client_size: tuple[int, int] = (0, 0)
+        self._dx = self._dy = 0
 
         @self._capture.event
         def on_frame_arrived(frame, capture_control):  # noqa: ANN001 - 库回调签名
             if self._on_frame_user is None:
                 return
             bgr = frame.convert_to_bgr().frame_buffer
-            self._on_frame_user(np.array(bgr, copy=True))  # 零拷贝视图回调后失效
+            self._on_frame_user(self._crop_to_client(np.array(bgr, copy=True)))
 
         @self._capture.event
         def on_closed():
             cb = self._on_closed_user
             if cb is not None:
                 cb()
+
+    def _crop_to_client(self, frame: np.ndarray) -> np.ndarray:
+        """裁掉 WGC 帧的标题栏与边框，对齐客户区（ROI 坐标系）。
+
+        偏移规则（实测 Win11）：左右边框对称 dx=(fw-cw)//2，底部无边框
+        dy=fh-ch（标题栏高度）；异常几何（裁剪量非正/超界）时原帧返回。
+        """
+        fh, fw = frame.shape[:2]
+        if (fw, fh) != self._frame_size:
+            cw, ch = client_rect(self._hwnd)
+            self._frame_size = (fw, fh)
+            self._client_size = (cw, ch)
+            self._dx = max((fw - cw) // 2, 0)
+            self._dy = max(fh - ch, 0)
+        cw, ch = self._client_size
+        if self._dy + ch > fh or self._dx + cw > fw or ch <= 0 or cw <= 0:
+            return frame
+        return frame[self._dy : self._dy + ch, self._dx : self._dx + cw]
 
     @property
     def hwnd(self) -> int:

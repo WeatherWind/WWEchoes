@@ -122,7 +122,7 @@ class AppRuntime:
         self._scores: dict[int, EchoScore] = {}  # slot -> EchoScore（会话内累计）
 
         self.card = ScoreCard()
-        corner = Corner(settings.overlay_corner.replace("-", "_").upper())
+        corner = Corner(settings.overlay_corner.replace("-", "_"))  # "top-right" -> "top_right"
         self.overlay = OverlayWindow(content=self.card, corner=corner)
         self.card.resize(330, 430)
 
