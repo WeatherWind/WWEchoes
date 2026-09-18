@@ -38,16 +38,24 @@ _NUM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%?")
 
 
 def normalize_name(raw: str) -> str | None:
-    """OCR 词条名 -> 规范名；无法归一返回 None。"""
+    """OCR 词条名 -> 规范名；无法归一返回 None。
+
+    游戏内词条名前可能带小图标/装饰，OCR 常把它们误识成首字符噪声
+    （实测 3.6 版：``* 暴击``、``又攻击``、``X攻击``）。归一失败时
+    逐次剥离首字符重试（最长后缀匹配），保留至少 2 个字符。
+    """
     name = raw.strip().replace(" ", "")
     if not name:
         return None
-    name = _ALIASES.get(name, name)
     valid = set(PHANTOM_SUB_VALUES) | {
         "攻击", "攻击%", "生命", "生命%", "防御%", "暴击", "暴击伤害",
         "共鸣效率", "治疗效果加成",
     } | {f"{e}伤害加成" for e in ("冷凝", "衍射", "导电", "热熔", "气动", "湮灭")}
-    return name if name in valid else None
+    for candidate in (name, *(name[i:] for i in range(1, max(len(name) - 1, 0)))):
+        candidate = _ALIASES.get(candidate, candidate)
+        if candidate in valid:
+            return candidate
+    return None
 
 
 def parse_stat_line(line: str) -> StatEntry | None:

@@ -35,3 +35,15 @@ def test_unknown_returns_none():
     assert parse_stat_line("奇怪词条 +5") is None
     assert parse_stat_line("") is None
     assert parse_stat_line("没有数值") is None
+
+
+def test_leading_noise_char_stripped():
+    """OCR 把词条名前小图标误识成首字符噪声（3.6 版实测：* / 又 / X）。"""
+    assert _eq("* 暴击 22.0%", "暴击", 22.0)
+    assert _eq("又攻击 150", "攻击", 150.0)
+    assert _eq("X攻击 30", "攻击", 30.0)
+
+
+def test_noise_stripping_keeps_two_chars_minimum():
+    """后缀回退至少保留 2 字符，单字符名不存在，全噪声行返回 None。"""
+    assert parse_stat_line("X 8.8%") is None
