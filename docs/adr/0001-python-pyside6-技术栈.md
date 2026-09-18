@@ -1,6 +1,8 @@
 # 技术栈：Python 3.11+ / PySide6
 
-开发环境是 macOS，目标平台只有 Windows，产品需要屏幕捕获（WGC）、中文 OCR（PP-OCR 系 ONNX）、OpenCV 模板匹配三层能力。选定 Python + PySide6：三块生态全有成熟库，且核心逻辑（识别、评分、UI）可在 macOS 上开发调试，只有 Win32 窗口样式与捕获等薄层需 Windows 实测；ok-ww / MCEchoSys 为同领域同栈先例。
+产品需要屏幕捕获（WGC）、中文 OCR（PP-OCR 系 ONNX）、OpenCV 模板匹配三层能力。选定 Python + PySide6：三块生态全有成熟库，ok-ww / MCEchoSys 为同领域同栈先例；核心逻辑（识别、评分、UI）在任何平台可开发测试。
+
+> 2026-09-18 补充：协作模式为**双机跨对话**——macOS 会话负责纯逻辑/评分引擎/文档，Windows 会话负责截屏、悬浮窗、ROI 实测与打包验证（"macOS 无法开发"不再是本决策的主要依据，但决策不变：Python 仍是三层生态与社区先例的最优解）。
 
 ## Considered Options
 
