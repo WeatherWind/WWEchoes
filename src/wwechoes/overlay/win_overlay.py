@@ -67,11 +67,16 @@ class OverlayWindow:
         content: QWidget | None = None,
         corner: Corner = Corner.TOP_RIGHT,
         margin_px: int = 16,
+        anchor_pos: tuple[int, int] | None = None,
     ) -> None:
+        """anchor_pos: 参考矩形（游戏客户区）内的自定义锚点（客户区坐标，
+        悬浮窗左上角位置），设置后优先于 corner（用户标注的背包旁空档位）。"""
         if QApplication.instance() is None:
             raise RuntimeError("OverlayWindow 需要先创建 QApplication")
         self._corner = corner
         self._margin = margin_px
+        self._anchor_pos = anchor_pos
+        self._reference: tuple[int, int, int, int] | None = None
         self._visible = False
 
         self.widget = content if content is not None else QWidget()
@@ -109,6 +114,14 @@ class OverlayWindow:
             geo = screen.availableGeometry()
             rx, ry, rw, rh = geo.x(), geo.y(), geo.width(), geo.height()
         size = self.widget.size()
+        if self._anchor_pos is not None:
+            # 自定义锚点：ax 为左缘、ay 为**底边**目标（下边界与声骸列表
+            # 底边平齐的定位语义），夹取在参考矩形内
+            ax, ay = self._anchor_pos
+            x = min(max(rx + ax, rx), max(rx + rw - size.width(), rx))
+            y = min(max(ry + ay - size.height(), ry), max(ry + rh - size.height(), ry))
+            self.widget.move(x, y)
+            return
         m = self._margin
         left = self._corner in (Corner.TOP_LEFT, Corner.BOTTOM_LEFT)
         top = self._corner in (Corner.TOP_RIGHT, Corner.TOP_LEFT)
@@ -118,8 +131,17 @@ class OverlayWindow:
 
     # --- 显隐（不抢焦点）---
 
+    def set_anchor_pos(self, pos: tuple[int, int]) -> None:
+        """运行时更新锚点（托盘微调用），可见时立即重定位。"""
+        self._anchor_pos = pos
+        if self._visible:
+            self._reference = getattr(self, "_reference", None)
+            if self._reference is not None:
+                self._place_corner(self._reference)
+
     def show_no_activate(self, reference: tuple[int, int, int, int] | None = None) -> None:
         """显示悬浮窗（不抢焦点）；reference 为定位参考矩形（游戏客户区）。"""
+        self._reference = reference
         if self._visible:
             return
         self._ensure_native()
@@ -131,6 +153,7 @@ class OverlayWindow:
 
     def reposition(self, reference: tuple[int, int, int, int]) -> None:
         """参考矩形（游戏客户区）移动时重新定位（仅 move，不重绘内容）。"""
+        self._reference = reference
         if not self._visible:
             return
         self._place_corner(reference)

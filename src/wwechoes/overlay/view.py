@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from wwechoes.scoring.characters import get_config
 from wwechoes.scoring.models import CharacterScore, EchoScore
 from wwechoes.scoring.tables import (
     ELEMENT_PREFIXES,
@@ -118,14 +119,17 @@ class ScoreCard(QWidget):
         header = QHBoxLayout()
         self.char_label = QLabel("—")
         self.char_label.setFont(QFont(self.font().family(), 12, QFont.Weight.Bold))
-        self.grade_label = QLabel("--")
-        self.grade_label.setFont(QFont(self.font().family(), 16, QFont.Weight.Black))
         self.score_label = QLabel("0.0")
         self.score_label.setFont(QFont(self.font().family(), 12))
+        # 等级大字带底色 pill 放最右（真机反馈：分级不明显；pill 高度收紧）
+        self.grade_label = QLabel("--")
+        self.grade_label.setFont(QFont(self.font().family(), 18, QFont.Weight.Black))
+        self.grade_label.setFixedHeight(30)
+        self.grade_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header.addWidget(self.char_label)
         header.addStretch(1)
-        header.addWidget(self.grade_label)
         header.addWidget(self.score_label)
+        header.addWidget(self.grade_label)
         root.addLayout(header)
         self.best_label = QLabel("")  # 本槽历史最佳（同槽换声骸对比）
         self.best_label.setStyleSheet("color:#9aa0ab; font-size: 9pt;")
@@ -138,11 +142,18 @@ class ScoreCard(QWidget):
 
         self.summary = SummaryBar()
         root.addWidget(self.summary)
-        root.addStretch(1)  # 内容自适应高度，避免汇总条被纵向拉伸
         self._entry_labels: list[QLabel] = []
+        # 固定尺寸：容纳满配（2 主+5 副）词条；高度自适应会随异步重算抖动
+        # （真机反馈"一会高一会低"），且底边对齐定位依赖稳定高度
+        self.setFixedSize(336, 344)
 
     def show_character(self, score: CharacterScore) -> None:
-        self.char_label.setText(score.character)
+        if score.character == "default":
+            self.char_label.setText("通用评分·未选角色")
+        elif get_config(score.character).is_default:
+            self.char_label.setText(f"{score.character}·通用权重")  # 库外新角色
+        else:
+            self.char_label.setText(score.character)
         self.summary.update_score(score)
 
     def show_echo(self, echo: EchoScore, character: CharacterScore, slot_index: int) -> None:
@@ -151,7 +162,11 @@ class ScoreCard(QWidget):
         slot_index: 0-4 槽位（汇总条对应格子高亮）。
         """
         self.grade_label.setText(echo.grade.upper())
-        self.grade_label.setStyleSheet(f"color:{GRADE_COLORS[echo.grade].name()};")
+        self.grade_label.setStyleSheet(
+            f"color:{GRADE_COLORS[echo.grade].name()};"
+            "background-color: rgba(255,255,255,30);"
+            "border-radius: 5px; padding: 0 10px;"
+        )
         self.score_label.setText(f"{echo.score:g} / 50")
         self.show_character(character)
 
@@ -177,7 +192,6 @@ class ScoreCard(QWidget):
                 )
             elif slot.styleSheet():
                 slot.setStyleSheet("")
-        self.adjustSize()  # 词条数变化后重算卡片高度（否则内容被截断）
 
     def set_slot_best(self, best: float | None) -> None:
         """头部副行：本槽历史最佳对比（同槽换声骸的取舍依据）。"""
@@ -185,7 +199,6 @@ class ScoreCard(QWidget):
             self.best_label.setText("")
         else:
             self.best_label.setText(f"本槽最佳 {best:g}")
-        self.adjustSize()
 
 
 def preview() -> None:

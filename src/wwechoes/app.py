@@ -21,12 +21,17 @@ from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from wwechoes.config import Settings, load_settings
+from wwechoes.config import Settings, load_settings, save_settings
 from wwechoes.detect import PageState, PageStateMachine, detect_slot, is_16_9, observe_page
-from wwechoes.detect.roi import DETAIL_ECHO_NAME, DETAIL_MAIN_STATS, DETAIL_SUB_STATS
+from wwechoes.detect.roi import (
+    DETAIL_ECHO_NAME,
+    DETAIL_EQUIPPED_BY,
+    DETAIL_MAIN_STATS,
+    DETAIL_SUB_STATS,
+)
 from wwechoes.ocr.engine import OcrEngine
 from wwechoes.scoring import Echo
-from wwechoes.scoring.characters import get_config
+from wwechoes.scoring.characters import get_config, known_characters
 from wwechoes.scoring.engine import score_echo_for_character
 from wwechoes.scoring.models import CharacterScore, EchoScore
 
@@ -124,9 +129,8 @@ class AppRuntime:
 
         self.card = ScoreCard()
         corner = Corner(settings.overlay_corner.replace("-", "_"))  # "top-right" -> "top_right"
-        self.overlay = OverlayWindow(content=self.card, corner=corner)
-        self.card.setMinimumWidth(330)
-        self.card.adjustSize()  # 高度自适应内容（避免汇总条被纵向拉伸）
+        anchor = tuple(settings.overlay_anchor_pos) if settings.overlay_use_anchor else None
+        self.overlay = OverlayWindow(content=self.card, corner=corner, anchor_pos=anchor)
 
         self.pipeline = Pipeline(backend, game_hwnd, settings)
         self.pipeline.detail_ready.connect(self._on_detail)
@@ -177,12 +181,47 @@ class AppRuntime:
         s = self._settings
         return s.manual_character or s.last_character or "default"
 
+    def _auto_detect_character(self, frame: np.ndarray) -> str | None:
+        """从详情面板底部"XX装配中"横条 OCR 角色名（手动选择优先时跳过）。
+
+        实测（真机帧）：该行 OCR 干净命中；名字不在评分库（新角色，社区
+        数据源均未收录）时也采纳——按通用权重评分但角色名正确显示，
+        vendor 数据更新后自动升级为专属权重。
+        """
+        if self._settings.manual_character:
+            return None
+        import re
+
+        known = set(known_characters())
+        for line in self._ocr.read_lines(frame, DETAIL_EQUIPPED_BY):
+            m = re.search(r"([\u4e00-\u9fff]{1,10})装配中", line)
+            if not m:
+                continue
+            name = m.group(1)
+            if len(name) < 2:
+                continue
+            if name in known:
+                return self._adopt_character(name)
+            # OCR 噪声容错：已知角色名作为子串出现（如"爱弥斯装配中"混入杂字）
+            for k in known:
+                if k in name or name in k:
+                    return self._adopt_character(k)
+            return self._adopt_character(name)  # 库外新角色：名字照采，权重用通用
+        return None
+
+    def _adopt_character(self, name: str) -> str:
+        if self._settings.last_character != name:
+            self._settings.last_character = name
+            save_settings(self._settings)
+            self._rebuild_tray_menu()
+        return name
+
     def _on_detail(self, slot: int, frame: np.ndarray) -> None:
         self._hide_timer.stop()  # 取消挂起的 hide（切槽位动画去抖）
         self._last_detail = (slot, frame)
         mains = self._ocr.read_stats(frame, DETAIL_MAIN_STATS)
         subs = self._ocr.read_stats(frame, DETAIL_SUB_STATS)
-        character = self._current_character()
+        character = self._auto_detect_character(frame) or self._current_character()
         echo = Echo(cost=SLOT_COST[slot], main_stats=tuple(mains), sub_stats=tuple(subs))
         echo_score, _cfg = score_echo_for_character(echo, character)
 
@@ -203,15 +242,13 @@ class AppRuntime:
         if self._overlay_enabled:
             self.overlay.show_no_activate(ref)
         elif self.overlay.is_visible:
-            self.overlay.reposition(ref)  # 卡片高度变化后重定位
+            self.overlay.reposition(ref)
 
     def _on_hide(self) -> None:
         self._hide_timer.start()
 
     def _select_character(self, name: str) -> None:
         """托盘手动选角色：持久化 + 用最近详情帧立即重评（含汇总重置）。"""
-        from wwechoes.config import save_settings
-
         self._settings.manual_character = name
         self._settings.last_character = name
         save_settings(self._settings)
@@ -276,7 +313,7 @@ class AppRuntime:
         self._rebuild_tray_menu()
 
     def _rebuild_tray_menu(self) -> None:
-        """托盘菜单：当前角色状态 + 角色选择子菜单 + 退出（选角后重建）。"""
+        """托盘菜单：当前角色状态 + 角色选择 + 位置微调 + 退出（选角后重建）。"""
         from wwechoes.scoring.characters import known_characters
 
         menu = QMenu()
@@ -288,9 +325,26 @@ class AppRuntime:
         for name in known_characters():
             act = char_menu.addAction(("● " if name == current else "") + name)
             act.triggered.connect(lambda checked=False, n=name: self._select_character(n))
+
+        pos_menu = menu.addMenu("悬浮窗位置微调（20px/步）")
+        for text, dx, dy in (
+            ("← 左移", -20, 0), ("→ 右移", 20, 0),
+            ("↑ 上移", 0, -20), ("↓ 下移", 0, 20),
+        ):
+            act = pos_menu.addAction(text)
+            act.triggered.connect(lambda checked=False, dx=dx, dy=dy: self._adjust_anchor(dx, dy))
+
         menu.addSeparator()
         menu.addAction("退出").triggered.connect(self._app.quit)
         self._tray.setContextMenu(menu)
+
+    def _adjust_anchor(self, dx: int, dy: int) -> None:
+        """托盘位置微调：改锚点 + 持久化 + 立即重定位。"""
+        pos = self._settings.overlay_anchor_pos
+        self._settings.overlay_anchor_pos = [pos[0] + dx, pos[1] + dy]
+        save_settings(self._settings)
+        if self._settings.overlay_use_anchor:
+            self.overlay.set_anchor_pos(tuple(self._settings.overlay_anchor_pos))
 
 
 def _messagebox_error(*lines: str) -> None:
