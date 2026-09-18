@@ -95,36 +95,45 @@ class OverlayWindow:
         self._hwnd = int(self.widget.winId())
         self._win32_ok = _apply_win32_overlay_styles(self._hwnd)
 
-    def _place_corner(self) -> None:
-        screen = self.widget.screen() or QApplication.primaryScreen()
-        geo = screen.availableGeometry()
+    def _place_corner(self, reference: tuple[int, int, int, int] | None = None) -> None:
+        """把窗口放到角落。
+
+        reference: 参考矩形 (x, y, w, h) 屏幕坐标——默认游戏客户区，悬浮窗
+        贴其角落内侧（窗口模式下游戏不铺满屏幕，贴屏幕角落会跑到游戏外）；
+        无参考时回落屏幕可用区。
+        """
+        if reference is not None:
+            rx, ry, rw, rh = reference
+        else:
+            screen = self.widget.screen() or QApplication.primaryScreen()
+            geo = screen.availableGeometry()
+            rx, ry, rw, rh = geo.x(), geo.y(), geo.width(), geo.height()
         size = self.widget.size()
         m = self._margin
-        x = {
-            Corner.TOP_RIGHT: geo.right() - size.width() - m,
-            Corner.TOP_LEFT: geo.left() + m,
-            Corner.BOTTOM_RIGHT: geo.right() - size.width() - m,
-            Corner.BOTTOM_LEFT: geo.left() + m,
-        }[self._corner]
-        y = {
-            Corner.TOP_RIGHT: geo.top() + m,
-            Corner.TOP_LEFT: geo.top() + m,
-            Corner.BOTTOM_RIGHT: geo.bottom() - size.height() - m,
-            Corner.BOTTOM_LEFT: geo.bottom() - size.height() - m,
-        }[self._corner]
+        left = self._corner in (Corner.TOP_LEFT, Corner.BOTTOM_LEFT)
+        top = self._corner in (Corner.TOP_RIGHT, Corner.TOP_LEFT)
+        x = rx if left else rx + rw - size.width() - m
+        y = ry + m if top else ry + rh - size.height() - m
         self.widget.move(x, y)
 
     # --- 显隐（不抢焦点）---
 
-    def show_no_activate(self) -> None:
+    def show_no_activate(self, reference: tuple[int, int, int, int] | None = None) -> None:
+        """显示悬浮窗（不抢焦点）；reference 为定位参考矩形（游戏客户区）。"""
         if self._visible:
             return
         self._ensure_native()
-        self._place_corner()
+        self._place_corner(reference)
         self.widget.show()
         if self._hwnd is not None:
             _USER32.ShowWindow(self._hwnd, _SW_SHOWNOACTIVATE)
         self._visible = True
+
+    def reposition(self, reference: tuple[int, int, int, int]) -> None:
+        """参考矩形（游戏客户区）移动时重新定位（仅 move，不重绘内容）。"""
+        if not self._visible:
+            return
+        self._place_corner(reference)
 
     def hide(self) -> None:
         if not self._visible:

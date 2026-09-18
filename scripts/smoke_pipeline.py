@@ -38,13 +38,22 @@ def main() -> int:
         print("[skip] 无本地素材")
         return 0
 
-    # 模拟主循环：观测 -> DETAIL 时槽位触发（与 app.Pipeline._on_frame 同构）
+    # 模拟主循环：观测 -> DETAIL 时槽位触发（与 app.Pipeline._on_frame 同构）。
+    # 素材顶部为游戏窗口标题栏，裁掉后补黑边回 1920×1080 客户区基准帧
+    # （详见 verify_assets.py 同款注释）。
+    from wwechoes.detect.roi import BASE_H, SCREEN_ARTIFACT_HEIGHT  # noqa: E402
+
     ocr = OcrEngine()
     scores: dict[int, object] = {}
     character = "default"
     detail_seen = 0
     for f in files:
-        frame = imread(f)
+        cropped = imread(f)[SCREEN_ARTIFACT_HEIGHT:, :]
+        pad = cropped.shape[0] - BASE_H
+        if pad < 0:
+            frame = cv2.copyMakeBorder(cropped, 0, -pad, 0, 0, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        else:
+            frame = cropped
         state = observe_page(frame)
         if state is not PageState.DETAIL:
             continue

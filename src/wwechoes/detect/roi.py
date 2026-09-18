@@ -1,12 +1,13 @@
 """ROI 定义与分辨率缩放。
 
-所有 ROI 以 1920×1080（16:9 基准）的像素坐标定义；其他 16:9 分辨率按
-宽高比等比缩放。坐标值实测自国服 3.6 版本 1080p 截图（docs/assets/raw/，
-混淆矩阵验证见 scripts/verify_assets.py 与 docs/worklog/）。
+坐标系约定：**游戏窗口客户区**（真机 WGC 帧裁剪后的 1920×1080，内容
+从 y=0 起）；其他 16:9 分辨率按宽高比等比缩放。坐标值实测自国服 3.6
+版本（docs/assets/raw/ 素材 + 真机 WGC 帧双重定标，混淆矩阵验证见
+scripts/verify_assets.py 与 docs/worklog/）。
 
-注意：采集截图顶部 y=0..30 为屏幕遮挡伪影（近白横条，非游戏 UI），游戏
-内容从 y=31 起。WGC 运行时抓取的是窗口客户区，实测若无伪影则需用
-``SCREEN_ARTIFACT_HEIGHT`` 校准 y 偏移（见 matchers.frame_offset）。
+注意：本地素材截图顶部 y=0..30 是游戏窗口的系统标题栏（UE 自绘无按钮，
+曾误判为"屏幕伪影"），喂给本模块判据前必须裁掉顶部 ``SCREEN_ARTIFACT_HEIGHT``
+行（verify_assets.py 已处理）；真机 WGC 帧经 capture 层裁剪后无需处理。
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from dataclasses import dataclass
 
 BASE_W, BASE_H = 1920, 1080
 
-#: 用户采集截图中游戏内容上方的屏幕伪影高度（像素）；运行时按需用于 y 校准
+#: 素材截图中游戏窗口系统标题栏的高度（像素）；素材图喂判据前裁掉顶部这多行
 SCREEN_ARTIFACT_HEIGHT = 31
 
 
@@ -45,13 +46,13 @@ def is_16_9(width: int, height: int, tolerance: float = 0.02) -> bool:
 # ---------------------------------------------------------------------------
 
 #: 左侧页签列第 3 位（声骸页签）金色高亮竖条 —— 装配页最强单一特征
-ASSEMBLY_TAB_GOLD = Roi(50, 478, 60, 46)
+ASSEMBLY_TAB_GOLD = Roi(50, 447, 60, 46)
 
 #: 右上 COST 数字区（如 "12/12"）；需上下限窗口排除亮场景
-ASSEMBLY_COST_DIGITS = Roi(1340, 150, 150, 65)
+ASSEMBLY_COST_DIGITS = Roi(1340, 119, 150, 65)
 
 #: 底部白色胶囊按钮排（替换/声骸推荐）
-ASSEMBLY_BOTTOM_BUTTONS = Roi(250, 1000, 350, 36)
+ASSEMBLY_BOTTOM_BUTTONS = Roi(250, 969, 350, 36)
 
 #: 装配页检测 ROI 汇总（保持既有占位名，供通用遍历）
 ASSEMBLY_PAGE_ROIS: tuple[Roi, ...] = (
@@ -65,10 +66,10 @@ ASSEMBLY_PAGE_ROIS: tuple[Roi, ...] = (
 # ---------------------------------------------------------------------------
 
 #: 面板顶部金色胶囊开关 —— 面板存在最强特征（打开面板时 18/18 恒定命中）
-DETAIL_GOLD_CAPSULE = Roi(1320, 78, 140, 35)
+DETAIL_GOLD_CAPSULE = Roi(1320, 47, 140, 35)
 
 #: COST 行与主词条 1 之间的暗色均匀带（mean/std/max 三重判据）
-DETAIL_DARK_BAND = Roi(1560, 250, 300, 13)
+DETAIL_DARK_BAND = Roi(1560, 219, 300, 13)
 
 #: 详情面板检测 ROI 汇总
 DETAIL_PANEL_ROIS: tuple[Roi, ...] = (DETAIL_GOLD_CAPSULE, DETAIL_DARK_BAND)
@@ -79,26 +80,26 @@ DETAIL_PANEL_ROIS: tuple[Roi, ...] = (DETAIL_GOLD_CAPSULE, DETAIL_DARK_BAND)
 # ---------------------------------------------------------------------------
 
 #: 声骸名（金字 ≈246,239,190），含等级与类型图标行
-DETAIL_ECHO_NAME = Roi(1508, 183, 345, 25)
+DETAIL_ECHO_NAME = Roi(1508, 152, 345, 25)
 
 #: 强化等级数字（如 "+25"），名称行右端
-DETAIL_LEVEL = Roi(1770, 183, 46, 25)
+DETAIL_LEVEL = Roi(1770, 152, 46, 25)
 
 #: COST 行（"COST" 标签 + 数字 + 槽位图标）
-DETAIL_COST_ROW = Roi(1512, 219, 334, 25)
+DETAIL_COST_ROW = Roi(1512, 188, 334, 25)
 
-#: 主词条区：2 行（y≈270 / y≈306），Cost4 为 2 条主词条；3.6 版本 c1/c3 同为 2 行
-DETAIL_MAIN_STATS = Roi(1508, 265, 350, 70)
+#: 主词条区：2 行（y≈239 / y≈275），Cost4 为 2 条主词条；3.6 版本 c1/c3 同为 2 行
+DETAIL_MAIN_STATS = Roi(1508, 234, 350, 70)
 
-#: 副词条区：最多 5 行，y=344 起步进 35px；+0 未强化时整块空白（固定网格逐行探测）
-DETAIL_SUB_STATS = Roi(1508, 340, 350, 170)
+#: 副词条区：最多 5 行，y=313 起步进 35px；+0 未强化时整块空白（固定网格逐行探测）
+DETAIL_SUB_STATS = Roi(1508, 309, 350, 170)
 
-#: 副词条单行（i=0..4）：Roi(1518, 344 + 35*i, 320, 22)
+#: 副词条单行（i=0..4）：Roi(1518, 313 + 35*i, 320, 22)
 def sub_stat_row(i: int) -> Roi:
     """副词条第 i 行（0 基）。"""
     if not 0 <= i <= 4:
         raise ValueError(f"副词条行号 0..4，got {i}")
-    return Roi(1518, 344 + 35 * i, 320, 22)
+    return Roi(1518, 313 + 35 * i, 320, 22)
 
 
 # ---------------------------------------------------------------------------
@@ -118,11 +119,11 @@ class SlotProbe:
     @staticmethod
     def for_slot(slot: int) -> SlotProbe:
         probes = {
-            1: SlotProbe(Roi(50, 265, 122, 30), 62, 138),
-            2: SlotProbe(Roi(40, 436, 118, 22), 62, 138),
-            3: SlotProbe(Roi(40, 544, 118, 22), 62, 138),
-            4: SlotProbe(Roi(40, 653, 118, 22), 62, 138),
-            5: SlotProbe(Roi(40, 760, 118, 22), 62, 138),
+            1: SlotProbe(Roi(50, 234, 122, 30), 62, 138),
+            2: SlotProbe(Roi(40, 405, 118, 22), 62, 138),
+            3: SlotProbe(Roi(40, 513, 118, 22), 62, 138),
+            4: SlotProbe(Roi(40, 622, 118, 22), 62, 138),
+            5: SlotProbe(Roi(40, 729, 118, 22), 62, 138),
         }
         if slot not in probes:
             raise ValueError(f"槽位号 1..5，got {slot}")

@@ -24,3 +24,13 @@ def test_overlay_corner_invalid_value_raises():
 
     with pytest.raises(ValueError, match="not a valid Corner"):
         Corner("top-right")  # 连字符不是合法枚举值（曾致真机崩溃的转换缺失）
+
+
+def test_fmt_value_percent_suffix():
+    from wwechoes.overlay.view import _fmt_value
+
+    assert _fmt_value("暴击", 8.1) == "8.1%"
+    assert _fmt_value("攻击%", 11.6) == "11.6%"
+    assert _fmt_value("湮灭伤害加成", 30.0) == "30%"
+    assert _fmt_value("攻击", 150.0) == "150"
+    assert _fmt_value("生命", 470.0) == "470"

@@ -19,6 +19,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from wwechoes.detect import PageState, detect_slot, observe_page  # noqa: E402
+from wwechoes.detect.roi import BASE_H  # noqa: E402
 
 DEFAULT_DIR = "docs/assets/raw"
 
@@ -44,9 +45,11 @@ def main() -> int:
         print(f"[skip] {assets} 下无截图素材（仅 Windows 本机留存），跳过回归。")
         return 0
 
-    # 坐标系约定：ROI 常量按截图原始坐标系标注（顶部 0..30 伪影条视为基准
-    # 帧一部分，所有 ROI 的 y>=78 不受影响）；素材整图直接作为基准 1080p 帧
-    # 喂给判据。运行时 WGC 客户区帧由 matchers 内部 scale_roi 自适应缩放。
+    # 坐标系约定：ROI 常量为游戏客户区坐标系（真机 WGC 帧裁剪后内容从
+    # y=0 起）；素材截图顶部 SCREEN_ARTIFACT_HEIGHT 行是游戏窗口系统
+    # 标题栏，喂判据前裁掉，模拟客户区帧。
+    from wwechoes.detect.roi import SCREEN_ARTIFACT_HEIGHT  # noqa: E402
+
     correct = wrong = 0
     slot_total = slot_ok = 0
     failures: list[str] = []
@@ -60,7 +63,15 @@ def main() -> int:
             failures.append(f"{name}: 读取失败")
             wrong += 1
             continue
-        frame = img
+        # 裁掉标题栏后素材缺底部 31px（截图高度 1080 截断），补黑边回
+        # 1920×1080 基准，避免 matchers 触发等比缩放造成伪错位
+        # （真机 WGC 客户区帧就是标准 1080 高，无需缩放）。
+        cropped = img[SCREEN_ARTIFACT_HEIGHT:, :]
+        pad = cropped.shape[0] - BASE_H
+        if pad < 0:
+            frame = cv2.copyMakeBorder(cropped, 0, -pad, 0, 0, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        else:
+            frame = cropped
         obs = observe_page(frame)
         expect = {
             "ASM": PageState.ASSEMBLY,

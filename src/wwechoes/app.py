@@ -23,7 +23,7 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from wwechoes.config import Settings, load_settings
 from wwechoes.detect import PageState, PageStateMachine, detect_slot, is_16_9, observe_page
-from wwechoes.detect.roi import DETAIL_MAIN_STATS, DETAIL_SUB_STATS
+from wwechoes.detect.roi import DETAIL_ECHO_NAME, DETAIL_MAIN_STATS, DETAIL_SUB_STATS
 from wwechoes.ocr.engine import OcrEngine
 from wwechoes.scoring import Echo
 from wwechoes.scoring.characters import get_config
@@ -120,18 +120,56 @@ class AppRuntime:
         self._overlay_enabled = True  # 热键切换的手动总开关
         self._ocr = OcrEngine()
         self._scores: dict[int, EchoScore] = {}  # slot -> EchoScore（会话内累计）
+        self._slot_best: dict[int, tuple[float, str]] = {}  # slot -> (最高分, 声骸名)
 
         self.card = ScoreCard()
         corner = Corner(settings.overlay_corner.replace("-", "_"))  # "top-right" -> "top_right"
         self.overlay = OverlayWindow(content=self.card, corner=corner)
-        self.card.resize(330, 430)
+        self.card.setMinimumWidth(330)
+        self.card.adjustSize()  # 高度自适应内容（避免汇总条被纵向拉伸）
 
         self.pipeline = Pipeline(backend, game_hwnd, settings)
         self.pipeline.detail_ready.connect(self._on_detail)
         self.pipeline.overlay_hide.connect(self._on_hide)
+        self._game_hwnd = game_hwnd
+        self._last_detail: tuple[int, np.ndarray] | None = None  # (slot, frame)，选角色后重评用
+
+        # hide 去抖：切槽位动画期间检测短暂回落 UNKNOWN，直接 hide 会闪烁
+        from PySide6.QtCore import QTimer
+
+        self._hide_timer = QTimer(self._app)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.setInterval(450)
+        self._hide_timer.timeout.connect(lambda: self.overlay.hide())
 
         self._register_hotkey()
         self._setup_tray()
+        self._follow_timer = None
+
+    def start_following(self) -> None:
+        """轮询游戏窗口位置，悬浮窗跟随（move 级开销，非逐帧重绘）。"""
+        from PySide6.QtCore import QTimer
+
+        self._last_ref = self._game_client_rect()
+        self._follow_timer = QTimer(self._app)
+        self._follow_timer.timeout.connect(self._on_follow_tick)
+        self._follow_timer.start(400)
+
+    def _on_follow_tick(self) -> None:
+        ref = self._game_client_rect()
+        if ref != self._last_ref:
+            self._last_ref = ref
+            if self.overlay.is_visible:
+                self.overlay.reposition(ref)
+
+    def _game_client_rect(self) -> tuple[int, int, int, int]:
+        """游戏客户区的屏幕坐标矩形（悬浮窗定位参考；窗口模式游戏不铺满屏）。"""
+        user32 = ctypes.windll.user32
+        pt = ctypes.wintypes.POINT(0, 0)
+        user32.ClientToScreen(self._game_hwnd, ctypes.byref(pt))
+        rect = ctypes.wintypes.RECT()
+        user32.GetClientRect(self._game_hwnd, ctypes.byref(rect))
+        return (pt.x, pt.y, rect.right - rect.left, rect.bottom - rect.top)
 
     # --- 详情面板处理（主线程）---
 
@@ -140,22 +178,50 @@ class AppRuntime:
         return s.manual_character or s.last_character or "default"
 
     def _on_detail(self, slot: int, frame: np.ndarray) -> None:
+        self._hide_timer.stop()  # 取消挂起的 hide（切槽位动画去抖）
+        self._last_detail = (slot, frame)
         mains = self._ocr.read_stats(frame, DETAIL_MAIN_STATS)
         subs = self._ocr.read_stats(frame, DETAIL_SUB_STATS)
         character = self._current_character()
         echo = Echo(cost=SLOT_COST[slot], main_stats=tuple(mains), sub_stats=tuple(subs))
         echo_score, _cfg = score_echo_for_character(echo, character)
 
+        # 本槽历史最佳（声骸名区分同槽不同件，换装取舍依据）
+        name_line = " ".join(self._ocr.read_lines(frame, DETAIL_ECHO_NAME))
+        best = self._slot_best.get(slot)
+        is_new_best = best is None or echo_score.score > best[0]
+        if is_new_best:
+            self._slot_best[slot] = (echo_score.score, name_line)
+        self.card.set_slot_best(None if is_new_best else best[0])
+
         self._scores[slot] = echo_score
         echoes = tuple(self._scores.get(k) for k in range(1, 6))
         char_score = CharacterScore(character=character, echoes=echoes)
         char_score.grade(get_config(character).total_grade)
         self.card.show_echo(echo_score, char_score, slot_index=slot - 1)
+        ref = self._game_client_rect()
         if self._overlay_enabled:
-            self.overlay.show_no_activate()
+            self.overlay.show_no_activate(ref)
+        elif self.overlay.is_visible:
+            self.overlay.reposition(ref)  # 卡片高度变化后重定位
 
     def _on_hide(self) -> None:
-        self.overlay.hide()
+        self._hide_timer.start()
+
+    def _select_character(self, name: str) -> None:
+        """托盘手动选角色：持久化 + 用最近详情帧立即重评（含汇总重置）。"""
+        from wwechoes.config import save_settings
+
+        self._settings.manual_character = name
+        self._settings.last_character = name
+        save_settings(self._settings)
+        self._scores.clear()  # 切角色 = 汇总条与本槽最佳重置（产品语义）
+        self._slot_best.clear()
+        if self._last_detail is not None:
+            slot, frame = self._last_detail
+            self._last_detail = None
+            self._on_detail(slot, frame)
+        self._rebuild_tray_menu()
 
     # --- 热键（仅监听，不注入输入）---
 
@@ -205,11 +271,26 @@ class AppRuntime:
         painter.end()
         tray = QSystemTrayIcon(QIcon(pix))
         tray.setToolTip("WWEchoes 声骸评分（Alt+E 切换显示）")
-        menu = QMenu()
-        menu.addAction("退出").triggered.connect(self._app.quit)
-        tray.setContextMenu(menu)
         tray.show()
         self._tray = tray
+        self._rebuild_tray_menu()
+
+    def _rebuild_tray_menu(self) -> None:
+        """托盘菜单：当前角色状态 + 角色选择子菜单 + 退出（选角后重建）。"""
+        from wwechoes.scoring.characters import known_characters
+
+        menu = QMenu()
+        current = self._current_character()
+        label = "当前角色：default（通用权重）" if current == "default" else f"当前角色：{current}"
+        menu.addAction(label).setEnabled(False)
+
+        char_menu = menu.addMenu("选择角色")
+        for name in known_characters():
+            act = char_menu.addAction(("● " if name == current else "") + name)
+            act.triggered.connect(lambda checked=False, n=name: self._select_character(n))
+        menu.addSeparator()
+        menu.addAction("退出").triggered.connect(self._app.quit)
+        self._tray.setContextMenu(menu)
 
 
 def _messagebox_error(*lines: str) -> None:
@@ -270,6 +351,7 @@ def main() -> int:
 
     runtime = AppRuntime(app, backend, game_hwnd, settings)
     runtime.pipeline.start()
+    runtime.start_following()
     try:
         return app.exec()
     finally:
