@@ -18,5 +18,11 @@ dist/
 .idea/
 .vscode/
 
+# 截图/录像素材：仅本地留存（版权属库洛，且含隐私风险），不入库
+# 例外：notes.md（游戏版本记录）与 .gitkeep 保持跟踪
+docs/assets/raw/*
+!docs/assets/raw/notes.md
+!docs/assets/raw/.gitkeep
+
 # 系统杂项
 .DS_Store
