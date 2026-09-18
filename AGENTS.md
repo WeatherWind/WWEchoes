@@ -55,6 +55,7 @@
 - 平台守卫：Windows 专用代码集中在 `capture/`、`overlay/` 的 win 模块内，用懒加载隔离，保证 mac 上可导入运行其余部分与单测。
 
 ## 当前状态与下一步
-- 已完成：初始技术调研、需求对齐（14 项决策收敛）、CONTEXT.md、3 个 ADR、M0 项目骨架与评分引擎（21 测试全过）、远程仓库接入。
-- 进行中：等待 Windows 会话接手 capture/overlay/ROI 实测。
-- 待用户动作：Windows 会话提供 1080p 国服截图到 `docs/assets/`（ROI 设计前置）。
+- 已完成：初始技术调研、需求对齐（14 项决策收敛）、CONTEXT.md、3 个 ADR、M0 项目骨架与评分引擎、远程仓库接入、**M1 画面管线**（2026-09-19 Windows 会话：检测判据/捕获/悬浮窗/OCR/端到端编排，素材回归 35/35，详见 docs/worklog/2026-09-19-Windows会话-M1画面管线.md）。
+- 进行中：等待用户开游戏实测 M1（`python -m wwechoes`；重点验证 WGC 帧与截图坐标的对齐——用户截图顶部有 31px 屏幕伪影，见 worklog「诚实边界」）。
+- mac 侧可接手：主窗口/设置 UI、手动选角色交互、ScoreCard 视觉细化、OCR worker 线程化。
+- 素材回归：Windows 本机跑 `python scripts/verify_assets.py`（素材更新/判据退化时先跑它）；冒烟脚本 `scripts/smoke_{capture,overlay,pipeline}.py`。
