@@ -191,6 +191,11 @@ class AppRuntime:
         self._tray = tray
 
 
+def _messagebox_error(*lines: str) -> None:
+    """无控制台（双击 exe）场景下的错误弹窗兜底。"""
+    ctypes.windll.user32.MessageBoxW(None, "\n".join(lines), "WWEchoes", 0x10)  # MB_ICONERROR
+
+
 def _parse_hotkey(text: str) -> tuple[int, int]:
     """'Alt+E' -> (MOD_ALT, vk)；支持 Ctrl/Alt/Shift 修饰与单字符键。"""
     MOD_ALT, MOD_CONTROL, MOD_SHIFT = 0x1, 0x2, 0x4
@@ -229,6 +234,7 @@ def main() -> int:
     except LookupError as e:
         print(f"[error] {e}", file=sys.stderr)
         print("请先启动游戏（无边框窗口模式）再运行 WWEchoes。", file=sys.stderr)
+        _messagebox_error(str(e), "请先启动游戏（无边框窗口模式）再运行 WWEchoes。")
         return 1
 
     app = QApplication(sys.argv)
