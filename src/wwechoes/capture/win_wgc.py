@@ -110,8 +110,8 @@ def find_game_hwnd(process_name: str = GAME_PROCESS_NAME) -> int:
     _USER32.EnumWindows(ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)(enum_proc), 0)
     if not matches:
         raise LookupError(
-            f"未找到进程 {process_name} 的可见窗口：游戏未运行，或以独占全屏运行"
-            "（独占全屏下 WGC 无法捕获，请以无边框窗口运行游戏）"
+            f"未找到进程 {process_name} 的可见窗口：游戏未运行，"
+            "或以独占全屏运行导致捕获失败（可切换为游戏内『窗口』显示模式后重试）"
         )
     matches.sort(reverse=True)
     return matches[0][1]

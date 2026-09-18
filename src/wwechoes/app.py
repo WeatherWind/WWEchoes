@@ -22,7 +22,7 @@ from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from wwechoes.config import Settings, load_settings
-from wwechoes.detect import PageState, PageStateMachine, detect_slot, observe_page
+from wwechoes.detect import PageState, PageStateMachine, detect_slot, is_16_9, observe_page
 from wwechoes.detect.roi import DETAIL_MAIN_STATS, DETAIL_SUB_STATS
 from wwechoes.ocr.engine import OcrEngine
 from wwechoes.scoring import Echo
@@ -56,6 +56,7 @@ class Pipeline(QObject):
         self._lock = threading.Lock()
         self._latest: np.ndarray | None = None
         self._last_slot: int | None = None
+        self._diag_keys: set[tuple[int, int]] = set()  # 已诊断过的帧尺寸
 
         def observer() -> PageState:
             with self._lock:
@@ -72,10 +73,30 @@ class Pipeline(QObject):
     def stop(self) -> None:
         self._backend.stop()
 
+    def _diagnose(self, frame: np.ndarray) -> None:
+        """帧尺寸变化时输出一次诊断（真机对齐排查用）。
+
+        关注三点：帧尺寸（窗口模式约 1920×1049 客户区 / 全屏 1920×1080）、
+        顶部是否有截图素材中的 31px 白条（WGC 抓窗口应不含其他置顶窗口，
+        出现即说明对齐假设需复核）、16:9 校验。
+        """
+        h, w = frame.shape[:2]
+        top = frame[2:30].astype(np.int16) if h >= 32 else np.zeros((1, 1, 3), np.int16)
+        white_bar = bool(np.all(np.abs(top - (249, 244, 238)) < 12))
+        print(
+            f"[wwechoes] 捕获帧 {w}x{h}（16:9={is_16_9(w, h)}）"
+            f" 顶部白条={'有(坐标对齐需复核)' if white_bar else '无(预期)'}",
+            file=sys.stderr,
+        )
+        self._diag_keys.add((w, h))
+
     def _on_frame(self, frame: np.ndarray) -> None:
         """捕获线程回调：仅做检测与状态机（无 GUI 调用）。"""
         with self._lock:
             self._latest = frame
+        key = (frame.shape[1], frame.shape[0])
+        if key not in self._diag_keys:
+            self._diagnose(frame)
         state = self._machine.tick()
         if state is PageState.DETAIL:
             slot = detect_slot(frame)
@@ -233,8 +254,9 @@ def main() -> int:
         game_hwnd = find_game_hwnd()
     except LookupError as e:
         print(f"[error] {e}", file=sys.stderr)
-        print("请先启动游戏（无边框窗口模式）再运行 WWEchoes。", file=sys.stderr)
-        _messagebox_error(str(e), "请先启动游戏（无边框窗口模式）再运行 WWEchoes。")
+        hint = "请先启动游戏再运行 WWEchoes（若已启动仍报错，试试切换游戏内显示模式为『窗口』）。"
+        print(hint, file=sys.stderr)
+        _messagebox_error(str(e), hint)
         return 1
 
     app = QApplication(sys.argv)
