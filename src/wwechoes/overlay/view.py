@@ -39,14 +39,14 @@ VALID_TIER_COLORS = {
     "s": QColor("#e6b422"),
     "a": QColor("#9d7bd8"),
     "b": QColor("#5bbd6b"),
-    None: QColor("#ccd2da"),  # 非有效词条：暗灰真机不可读，提亮
+    None: QColor("#dde2e8"),  # 非有效词条：暗灰真机不可读，提亮至近白
 }
 
 #: 面板底色（真机像素取证：QWidget 不开 WA_StyledBackground 时 QSS 背景
 #: 不绘制，文字直压游戏画面对比度仅 1.3-1.6:1；开启后 #e8eaf0 约 14:1）
 _PANEL_QSS = """
-#scoreCard { background-color: rgba(14,16,22,235); border-radius: 10px; }
-QLabel { color: #e8eaf0; font-size: 12pt; font-weight: 600; }
+#scoreCard { background-color: rgba(12,14,20,245); border-radius: 10px; }
+QLabel { color: #f2f4f8; font-size: 11pt; font-weight: 600; }
 #summaryBar { background-color: rgba(0,0,0,115); border-radius: 6px; }
 """
 
@@ -113,7 +113,7 @@ class ScoreCard(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(_PANEL_QSS)
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 8)
+        root.setContentsMargins(12, 18, 12, 8)  # 顶边 18：标题行整体下移 ~10px
         root.setSpacing(3)
 
         header = QHBoxLayout()
@@ -146,7 +146,7 @@ class ScoreCard(QWidget):
         self._entry_labels: list[QLabel] = []
         # 固定尺寸：容纳满配（2 主+5 副）词条；高度自适应会随异步重算抖动
         # （真机反馈"一会高一会低"），且底边对齐定位依赖稳定高度
-        self.setFixedSize(336, 296)
+        self.setFixedSize(336, 306)
 
     def show_character(self, score: CharacterScore) -> None:
         if score.character == "default":
