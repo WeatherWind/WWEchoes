@@ -214,6 +214,10 @@ class AppRuntime:
             self._settings.last_character = name
             save_settings(self._settings)
             self._rebuild_tray_menu()
+            # 切角色 = 汇总条与本槽最佳重置（产品语义）。识别发生在本帧
+            # 评分之前，当前件随后按新角色权重重新入账。
+            self._scores.clear()
+            self._slot_best.clear()
         return name
 
     def _on_detail(self, slot: int, frame: np.ndarray) -> None:
