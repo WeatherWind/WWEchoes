@@ -138,15 +138,23 @@ class ScoreCard(QWidget):
 
         self.entries_box = QVBoxLayout()
         self.entries_box.setSpacing(4)
-        root.addLayout(self.entries_box)
+        entries_host = QWidget()
+        entries_host.setLayout(self.entries_box)
+        # 词条区固定按满配 7 行（2 主+5 副）高度：卡片总高恒定、与词条数
+        # 无关（真机根因：DPI 缩放下 pt 行高大于标称，固定像素总高会溢出
+        # 挤掉汇总条；字体度量已含缩放，按它算行高即可）
+        from PySide6.QtGui import QFontMetrics
+
+        line_h = QFontMetrics(QFont(self.font().family(), 11)).height()
+        entries_host.setFixedHeight(7 * line_h + 6 * 4 + 4)
+        root.addWidget(entries_host)
         root.addSpacing(4)
 
         self.summary = SummaryBar()
         root.addWidget(self.summary)
         self._entry_labels: list[QLabel] = []
-        # 固定尺寸：容纳满配（2 主+5 副）词条；高度自适应会随异步重算抖动
-        # （真机反馈"一会高一会低"），且底边对齐定位依赖稳定高度
-        self.setFixedSize(336, 306)
+        self.setMinimumWidth(336)
+        self.adjustSize()  # 总高一次性按布局算定（含 DPI），此后恒定
 
     def show_character(self, score: CharacterScore) -> None:
         if score.character == "default":
