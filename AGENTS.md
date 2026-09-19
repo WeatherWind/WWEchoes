@@ -55,7 +55,7 @@
 - 平台守卫：Windows 专用代码集中在 `capture/`、`overlay/` 的 win 模块内，用懒加载隔离，保证 mac 上可导入运行其余部分与单测。
 
 ## 当前状态与下一步
-- 已完成：初始技术调研、需求对齐（14 项决策收敛）、CONTEXT.md、3 个 ADR、M0 项目骨架与评分引擎、远程仓库接入、**M1 画面管线**（2026-09-19 Windows 会话：检测判据/捕获/悬浮窗/OCR/端到端编排，素材回归 35/35，详见 docs/worklog/2026-09-19-Windows会话-M1画面管线.md）。
-- 进行中：等待用户开游戏实测 M1（`python -m wwechoes`；重点验证 WGC 帧与截图坐标的对齐——用户截图顶部有 31px 屏幕伪影，见 worklog「诚实边界」）。
-- mac 侧可接手：主窗口/设置 UI、手动选角色交互、ScoreCard 视觉细化、OCR worker 线程化。
-- 素材回归：Windows 本机跑 `python scripts/verify_assets.py`（素材更新/判据退化时先跑它）；冒烟脚本 `scripts/smoke_{capture,overlay,pipeline}.py`。
+- 已完成：初始技术调研、需求对齐（14 项决策收敛）、CONTEXT.md、3 个 ADR、M0 项目骨架与评分引擎、远程仓库接入、**M1 画面管线**、**M1 真机验收与调优**（2026-09-19：全链路真机跑通、角色自动识别（"XX装配中"OCR）、悬浮窗位置微调菜单、可读性六轮迭代；详见 docs/worklog/2026-09-19-Windows会话-M1真机验收与调优.md）。
+- 已知边界：3.6 后 7 个新角色（爱弥斯等）全网无权重数据（调研结论：不换源，等上游），按通用权重评分并标注；全屏模式未实测。
+- mac 侧可接手：主窗口/设置 UI（角色选择迁入）、ScoreCard 细化、OCR worker 线程化。
+- 素材回归：Windows 本机跑 `python scripts/verify_assets.py`（素材更新/判据退化时先跑它）；冒烟脚本 `scripts/smoke_{capture,overlay,pipeline}.py`；真机调试 `scripts/live_monitor.py`。
