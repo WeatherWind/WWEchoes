@@ -70,18 +70,19 @@ class SummaryBar(QFrame):
         self.setFixedHeight(38)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
         self.slots: list[QLabel] = []
         for _ in range(5):
             slot = QLabel("--")
             slot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            slot.setMinimumWidth(42)
+            slot.setMinimumWidth(38)
             layout.addWidget(slot)
             self.slots.append(slot)
         self.slot_names: list[str] = [""] * 5  # 预留：槽位声骸名（对比增强用）
         self.total = QLabel("0.0")
         self.total.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.total.setFont(QFont(self.font().family(), 10, QFont.Weight.Bold))
+        self.total.setMinimumWidth(76)  # "xxx.x / 250" 全显（曾因挤压截断）
         layout.addWidget(self.total)
 
     def update_score(self, score: CharacterScore | None) -> None:
