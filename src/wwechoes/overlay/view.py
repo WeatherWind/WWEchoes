@@ -45,8 +45,8 @@ VALID_TIER_COLORS = {
 #: 面板底色（真机像素取证：QWidget 不开 WA_StyledBackground 时 QSS 背景
 #: 不绘制，文字直压游戏画面对比度仅 1.3-1.6:1；开启后 #e8eaf0 约 14:1）
 _PANEL_QSS = """
-#scoreCard { background-color: rgba(14,16,22,230); border-radius: 10px; }
-QLabel { color: #e8eaf0; font-size: 11pt; }
+#scoreCard { background-color: rgba(14,16,22,235); border-radius: 10px; }
+QLabel { color: #e8eaf0; font-size: 12pt; font-weight: 600; }
 #summaryBar { background-color: rgba(0,0,0,115); border-radius: 6px; }
 """
 
@@ -117,14 +117,15 @@ class ScoreCard(QWidget):
         root.setSpacing(3)
 
         header = QHBoxLayout()
+        header.setSpacing(6)
         self.char_label = QLabel("—")
-        self.char_label.setFont(QFont(self.font().family(), 12, QFont.Weight.Bold))
+        self.char_label.setFont(QFont(self.font().family(), 11, QFont.Weight.Bold))
         self.score_label = QLabel("0.0")
-        self.score_label.setFont(QFont(self.font().family(), 12))
+        self.score_label.setFont(QFont(self.font().family(), 11))
         # 等级大字带底色 pill 放最右（真机反馈：分级不明显；pill 高度收紧）
         self.grade_label = QLabel("--")
-        self.grade_label.setFont(QFont(self.font().family(), 18, QFont.Weight.Black))
-        self.grade_label.setFixedHeight(30)
+        self.grade_label.setFont(QFont(self.font().family(), 15, QFont.Weight.Black))
+        self.grade_label.setFixedHeight(26)
         self.grade_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header.addWidget(self.char_label)
         header.addStretch(1)
@@ -132,7 +133,7 @@ class ScoreCard(QWidget):
         header.addWidget(self.grade_label)
         root.addLayout(header)
         self.best_label = QLabel("")  # 本槽历史最佳（同槽换声骸对比）
-        self.best_label.setStyleSheet("color:#9aa0ab; font-size: 9pt;")
+        self.best_label.setStyleSheet("color:#ccd2da; font-size: 8pt; margin: 0; padding: 0;")
         root.addWidget(self.best_label)
 
         self.entries_box = QVBoxLayout()
@@ -145,7 +146,7 @@ class ScoreCard(QWidget):
         self._entry_labels: list[QLabel] = []
         # 固定尺寸：容纳满配（2 主+5 副）词条；高度自适应会随异步重算抖动
         # （真机反馈"一会高一会低"），且底边对齐定位依赖稳定高度
-        self.setFixedSize(336, 308)
+        self.setFixedSize(336, 296)
 
     def show_character(self, score: CharacterScore) -> None:
         if score.character == "default":
